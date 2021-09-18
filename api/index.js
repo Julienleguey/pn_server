@@ -1,15 +1,18 @@
 const express = require("express");
 const bodyParser = require("body-parser");
-const cors = require("cors");
-const port = process.env.PORT || 8000;
 const WebSocket = require("ws");
+const cors = require("cors");
+// const port = process.env.PORT || 8000;
 
+const { createServer } = require("http");
 const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// app.use(express.json());
+// app.use(express.urlencoded({ extended: true }));
 app.use(cors());
 
-const wss = new WebSocket.Server({ port: 8001 });
+// const wss = new WebSocket.Server({ port: 8001 });
+const server = createServer(app);
+const wss = new WebSocket.Server({ server });
 
 const clients = new Map();
 
@@ -117,8 +120,12 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(port, () => {
-  console.log(`Server is running on PORT ${port}`);
-});
+// app.listen(port, () => {
+//   console.log(`Server is running on PORT ${port}`);
+// });
+//
+// module.exports = app;
 
-module.exports = app;
+server.listen(8080, function () {
+  console.log("Listening on http://0.0.0.0:8080");
+});
