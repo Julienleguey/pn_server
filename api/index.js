@@ -1,16 +1,12 @@
 const express = require("express");
-const bodyParser = require("body-parser");
 const WebSocket = require("ws");
 const cors = require("cors");
-// const port = process.env.PORT || 8000;
 
 const { createServer } = require("http");
 const app = express();
-// app.use(express.json());
-// app.use(express.urlencoded({ extended: true }));
+
 app.use(cors());
 
-// const wss = new WebSocket.Server({ port: 8001 });
 const server = createServer(app);
 const wss = new WebSocket.Server({ server });
 
@@ -22,6 +18,42 @@ function uuidv4() {
       v = c == "x" ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
+}
+
+function buildRes(ws, senderProtocol, body) {
+  let res = { instruction: null, message: null };
+
+  switch (body.instruction) {
+    case "reveal-notes":
+      res.instruction = "reveal-notes";
+      break;
+    case "new-vote":
+      res.instruction = "new-vote";
+      break;
+    case "update-players":
+      const metadata = clients.get(ws);
+      body.message.uuid = metadata.uuid;
+      clients.set(ws, body.message);
+      const players = Array.from(clients.values()).filter(
+        (v) => v.roomUid == senderProtocol
+      );
+
+      res.instruction = "update-players";
+      res.message = players;
+      break;
+  }
+
+  return res;
+}
+
+function sendToClients(senderProtocol, body) {
+  const bodyStringified = JSON.stringify(body);
+
+  [...clients.keys()]
+    .filter((client) => client.protocol == senderProtocol)
+    .forEach((client) => {
+      client.send(bodyStringified);
+    });
 }
 
 wss.on("connection", (ws) => {
@@ -41,42 +73,6 @@ wss.on("connection", (ws) => {
     sendToClients(senderProtocol, res);
   });
 
-  function buildRes(ws, senderProtocol, body) {
-    let res = { instruction: null, message: null };
-
-    switch (body.instruction) {
-      case "reveal-notes":
-        res.instruction = "reveal-notes";
-        break;
-      case "new-vote":
-        res.instruction = "new-vote";
-        break;
-      case "update-players":
-        const metadata = clients.get(ws);
-        body.message.uuid = metadata.uuid;
-        clients.set(ws, body.message);
-        const players = Array.from(clients.values()).filter(
-          (v) => v.roomUid == senderProtocol
-        );
-
-        res.instruction = "update-players";
-        res.message = players;
-        break;
-    }
-
-    return res;
-  }
-
-  function sendToClients(senderProtocol, res) {
-    const bodyStringified = JSON.stringify(res);
-
-    [...clients.keys()]
-      .filter((client) => client.protocol == senderProtocol)
-      .forEach((client) => {
-        client.send(bodyStringified);
-      });
-  }
-
   ws.on("close", () => {
     const senderProtocol = ws.protocol;
     clients.delete(ws);
@@ -84,13 +80,13 @@ wss.on("connection", (ws) => {
     const players = Array.from(clients.values()).filter(
       (v) => v.roomUid == senderProtocol
     );
-    const playersStringified = JSON.stringify(players);
 
-    [...clients.keys()]
-      .filter((client) => client.protocol == senderProtocol)
-      .forEach((client) => {
-        client.send(playersStringified);
-      });
+    const res = {
+      instruction: "update-players",
+      message: players,
+    };
+
+    sendToClients(senderProtocol, res);
   });
 });
 
@@ -119,12 +115,6 @@ app.use((err, req, res, next) => {
     },
   });
 });
-
-// app.listen(port, () => {
-//   console.log(`Server is running on PORT ${port}`);
-// });
-//
-// module.exports = app;
 
 server.listen(8080, function () {
   console.log("Listening on http://0.0.0.0:8080");
